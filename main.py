@@ -1,10 +1,12 @@
 import discord
 import tweepy
-from discord.ext import tasks
+from discord.ext import tasks, commands
 import tweepy.errors
 import time
 import os
 import asyncio
+
+twitter_alert_on = False
 
 # API and Tokens Infos
 discordBotToken = os.getenv("discordBotToken")
@@ -23,7 +25,7 @@ client = tweepy.Client(bearer_token=twitterBearerToken)
 # Discord Setting
 intents = discord.Intents.default() # 봇의 권한
 intents.message_content = True  # Enable message content
-bot = discord.Client(intents=intents)   # 봇의 인스턴스 생성
+bot = commands.Bot(command_prefix="/", intents=intents)   # 봇의 인스턴스 생성
 
 # 가장 최근 트윗 ID
 lastTweetID = None
@@ -57,11 +59,35 @@ async def checkTwitter():
         checkTwitter.restart()  # Restart the task after sleeping
 
 
+@bot.command(name="start_alert")
+async def start_alert(ctx):
+    print("start_alert")
+    global twitter_alert_on
+    if twitter_alert_on:
+        await ctx.send("트위터 알림은 이미 활성화되어 있습니다.")
+    else:
+        twitter_alert_on = True
+        checkTwitter.start()
+        await ctx.send("트위터 알림이 활성화되었습니다.")
+
+@bot.command(name="stop_alert")
+async def stop_alert(ctx):
+    print("stop_alert")
+    global twitter_alert_on
+    if not twitter_alert_on:
+        await ctx.send("트위터 알림은 이미 비활성화되어 있습니다.")
+    else:
+        twitter_alert_on = False
+        checkTwitter.stop()
+        await ctx.send("트위터 알림이 비활성화되었습니다.")
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
-    checkTwitter.start()
+    command_names = [command.name for command in bot.commands]
+    print(f"등록된 명령어: {command_names}")
+    # comman_list = "\n".join(command_names)
+    # await ctx.send(f"등록된 명령어: {comman_list}")
 
 @bot.event
 async def on_message(message):
