@@ -1,108 +1,78 @@
+import os
 import discord
 import tweepy
-from discord.ext import tasks, commands
-import tweepy.errors
-import time
-import os
-import asyncio
+from discord.ext import commands
+from dotenv import load_dotenv
 
-###################################################
-# to do list
-# 씨ㅣㅣㅣ발ㄹ 명령어 왜 않뒗;;
-# 트위터 알림 디코 채널에 가는지 확인
-# 을 하려면 명령어가 돼야 하는데
-# 씨ㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣ발 이거 왜 안되냐고
-###################################################
+# 환경 변수에서 디스코드 봇 토큰 불러오기
+load_dotenv("tokens.env")  # .env 파일 로드
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
 
-twitter_alert_on = False
-
-# API and Tokens Infos
-discordBotToken = os.getenv("discordBotToken")
-twitterBearerToken = os.getenv("twitterBearerToken")
-
-if discordBotToken is None:
-    raise ValueError("discordBotToken environment variable is not set.")
-if twitterBearerToken is None:
-    raise ValueError("twitterBearerToken environment variable is not set.")
-
-twitterUserID = "1787757306815696896"   # Twitter User ID is not userName (it's a number)
-
-# Tweepy Setting
-client = tweepy.Client(bearer_token=twitterBearerToken)
-
-# Discord Setting
-intents = discord.Intents.default() # 봇의 권한
-intents.message_content = True  # Enable message content
-bot = commands.Bot(command_prefix="/", intents=intents)   # 봇의 인스턴스 생성
-
-# 가장 최근 트윗 ID
-lastTweetID = None
+# 트위터 API 클라이언트 생성
+client = tweepy.Client(bearer_token=TWITTER_BEARER_TOKEN)
+# 최근 트윗 ID 저장 변수
+last_tweet_id = None
 
 
-@tasks.loop(seconds=60)
-async def checkTwitter():
-    global lastTweetID
+# 봇 인텐트 설정
+intents = discord.Intents.default()
+intents.message_content = True
 
-    try:
-        response = client.get_users_tweets(
-            id=twitterUserID,
-            max_results=5,
-            tweet_fields=['id', 'text', 'created_at']
-        )
-        tweets = response.data
+# 봇 객체 생성
+class MyBot(discord.Client):
+    def __init__(self):
+        super().__init__(intents=intents)
+        self.tree = discord.app_commands.CommandTree(self)
 
-        for tweet in tweets:
-            if lastTweetID is None:
-                lastTweetID = tweet.id
-                print(f"최초 실행: {tweet.text}")
-            elif lastTweetID < tweet.id:
-                lastTweetID = tweet.id
-                print(f"새로운 트윗: {tweet.text}")
+    async def setup_hook(self):
+        await self.tree.sync()  # 슬래시 명령어를 디스코드 서버와 동기화
+        print("명령어가 동기화 되었습니다.")
 
-    except tweepy.errors.TooManyRequests as e:
-        resetTime = int(e.response.headers.get("x-rate-limit-reset"))
-        sleepTime = resetTime - int(time.time())
-        print(f"Rate limit exceeded. Sleeping for {sleepTime} seconds.")
-        await asyncio.sleep(sleepTime)
-        checkTwitter.restart()  # Restart the task after sleeping
+    async def on_ready(self):
+        print(f"봇이 로그인되었습니다: {self.user}")
+
+# 봇 인스턴스 생성
+bot = MyBot()
 
 
-@bot.command(name="start_alert")
-async def start_alert(ctx):
-    print("start_alert")
-    global twitter_alert_on
-    if twitter_alert_on:
-        await ctx.send("트위터 알림은 이미 활성화되어 있습니다.")
+
+################### 명령어 ###################
+
+# /hello, 명령어 작동 확인용용
+@bot.tree.command(name="hello", description="Say hello to the bot!")
+async def hello(interaction: discord.Interaction):
+    await interaction.response.send_message(f"Hello, {interaction.user.name}!")
+
+# /tweet, 최근 트윗 가져오기(미완성)
+@bot.tree.command(name="tweet", description="트위터에서 최신 트윗을 가져옵니다.")
+async def tweet(interaction: discord.Interaction):
+    global last_tweet_id
+    # 최근 트윗 가져오기
+    tweet = client.get_users_tweets(
+        user_id="twitter",
+        max_results=1,
+        tweet_fields=["text"],
+        expansions=["author_id"]
+    )
+    # 최근 트윗 ID 업데이트
+    last_tweet_id = tweet.id
+    await interaction.response.send_message(f"최근 트윗: {tweet.text}")
+
+# /get_id, 유저의 ID 가져오기
+@bot.tree.command(name="get_id", description="유저의 ID를 가져옵니다.")
+async def get_user_id(interaction: discord.Interaction, username: str):
+    user_info = client.get_user(username = username)
+    if user_info:
+        await interaction.response.send_message(f"ID: {user_info.id}")  # 이 부분 되는지 확인 해야됨 too many requests 땜에 확인 못 했음
     else:
-        twitter_alert_on = True
-        checkTwitter.start()
-        await ctx.send("트위터 알림이 활성화되었습니다.")
+        await interaction.response.send_message("유저를 찾을 수 없습니다.")
 
-@bot.command(name="stop_alert")
-async def stop_alert(ctx):
-    print("stop_alert")
-    global twitter_alert_on
-    if not twitter_alert_on:
-        await ctx.send("트위터 알림은 이미 비활성화되어 있습니다.")
-    else:
-        twitter_alert_on = False
-        checkTwitter.stop()
-        await ctx.send("트위터 알림이 비활성화되었습니다.")
+##############################################
 
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-    command_names = [command.name for command in bot.commands]
-    print(f"등록된 명령어: {command_names}")
-    # comman_list = "\n".join(command_names)
-    # await ctx.send(f"등록된 명령어: {comman_list}")
 
-@bot.event
-async def on_message(message):
-    print(f"Message from {message.author}: {message.content}")  # Debugging statement
-    
-    if message.content == 'hello':
-        print('입력받음 "hello"')
-        await message.channel.send('Hello!')
-
-bot.run(discordBotToken)
+# 봇 실행
+if DISCORD_BOT_TOKEN:
+    bot.run(DISCORD_BOT_TOKEN)
+else:
+    print("ERROR: 환경 변수 DISCORD_BOT_TOKEN이 설정되지 않았습니다.")
