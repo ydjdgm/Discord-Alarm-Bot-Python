@@ -35,6 +35,25 @@ class MyBot(discord.Client):
     async def on_ready(self):
         print(f"봇이 로그인되었습니다: {self.user}")
 
+
+# Too Many Requests 에러 발생시
+async def handle_too_many_requests_error(interaction: discord.Interaction, response):
+    try:
+        print("Handling Too Many Requests error")
+        headers = response.headers
+        reset_time = int(headers["x-rate-limit-reset"])
+        remaining_time = reset_time - time.time()
+        print(f"Reset time: {reset_time}, Remaining time: {remaining_time}")
+        if remaining_time > 0:
+            minutes, seconds = divmod(remaining_time, 60)
+            return f"API 제한 해제까지 남은 시간: {int(minutes)}분 {int(seconds)}초."
+        else:
+            return "API 제한이 해제되었습니다."
+    except Exception as e:
+        print(f"Error handling Too Many Requests: {e}")
+        await interaction.response.send_message("뭔가가 잘못됐습니다. 하지만 이런 젠장! 뭐가 잘못된걸까요?")
+        return
+
 # 봇 인스턴스 생성
 bot = MyBot()
 
@@ -47,43 +66,39 @@ bot = MyBot()
 async def hello(interaction: discord.Interaction):
     await interaction.response.send_message(f"Hello, {interaction.user.name}!")
 
-# /cooldown, too many requests 에러 발생시 cooldown 시간 확인용용
-@bot.tree.command(name="check_cooldown", description="Check the cooldown time. (for too many requests)")
-async def check_cooldown(interaction: discord.Interaction):
-    global cooldown_end_time
-    if cooldown_end_time is None:
-        await interaction.response.send_message("현재 api 사용 가능상태입니다.")
-        return
-    remaining_time = cooldown_end_time - time.time()
-    return max(0, remaining_time)
 
-
-# /tweet, 최근 트윗 가져오기(미완성)
+# /tweet, 최근 트윗 가져오기
 @bot.tree.command(name="tweet", description="트위터에서 최신 트윗을 가져옵니다.")
 async def tweet(interaction: discord.Interaction, userid: str):
     global last_tweet_id
     # 최근 트윗 가져오기
     try:
-        tweet = client.get_users_tweets(
-            id=userid,  # 이 부분 문제 있음, 확인 필요, 투매니리퀘스트 이 ㅅㄲ땜에 또 못했음 개 ㅅㅂ, 일단 수정 했으니까 쿨 돌면 바로 돌려봅시다잉잉
+        response = client.get_users_tweets(
+            id=userid,
             max_results=5,
             tweet_fields=["text"],
             expansions=["author_id"]
         )
-    except Exception as e:
-        print(f"Error fetching tweets: {e}")
-        await interaction.response.send_message("트윗 불러오기에 실패했습니다다.")
-        return
+        tweets = response.data
 
-    # 최근 트윗 ID 업데이트
-    try:
-        if tweet.id != last_tweet_id:
-            last_tweet_id = tweet.id
-            await interaction.response.send_message(f"최근 트윗: {tweet.text}")
+        if not tweets:
+            await interaction.response.send_message("새로운 트윗이 없습니다.")
+            return
+
+        for tweet in tweets:
+            if last_tweet_id is None or last_tweet_id < tweet.id:
+                last_tweet_id = tweet.id
+                await interaction.response.send_message(f"최근 트윗: {tweet.id}")
+                break
         else:
             await interaction.response.send_message("새로운 트윗이 없습니다.")
+    except tweepy.TooManyRequests as e:
+        print(f"Error fetching tweets: {e}")
+        await interaction.response.send_message(await handle_too_many_requests_error(interaction, e.response))
+        return
     except Exception as e:
-        await interaction.response.send_message("트윗을 가져올 수 없습니다.")
+        print(f"Error fetching tweets: {e}")
+        await interaction.response.send_message("최근 트윗 업데이트에 실패했습니다.")
         return
 
 
@@ -91,14 +106,24 @@ async def tweet(interaction: discord.Interaction, userid: str):
 # /get_id, 유저의 ID 가져오기 (숫자로만 이루어진 ID)
 @bot.tree.command(name="get_id", description="유저의 ID를 가져옵니다.")
 async def get_user_id(interaction: discord.Interaction, username: str):
-    user_info = client.get_user(username = username)
-    if user_info:
-        try:
-            await interaction.response.send_message(user_info)
-        except:
-            await interaction.response.send_message("ID를 가져올 수 없습니다.")
-    else:
-        await interaction.response.send_message("유저를 찾을 수 없습니다.")
+    try:
+        user_info = client.get_user(username = username)
+        if user_info:
+            try:
+                await interaction.response.send_message(user_info)
+            except Exception as e:
+                print(f"Error fetching tweets: {e}")
+                await interaction.response.send_message("ID를 가져올 수 없습니다.")
+        else:
+            await interaction.response.send_message("유저를 찾을 수 없습니다.")
+    except tweepy.TooManyRequests as e:
+        print(f"Error fetching tweets: {e}")
+        await interaction.response.send_message(await handle_too_many_requests_error(interaction, client))
+        return
+    except Exception as e:
+        print(f"Error fetching tweets: {e}")
+        await interaction.response.send_message("ID를 가져올 수 없습니다.")
+        return
 
 ##############################################
 
