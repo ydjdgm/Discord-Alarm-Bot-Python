@@ -44,27 +44,41 @@ bot = MyBot()
 async def hello(interaction: discord.Interaction):
     await interaction.response.send_message(f"Hello, {interaction.user.name}!")
 
+
 # /tweet, 최근 트윗 가져오기(미완성)
 @bot.tree.command(name="tweet", description="트위터에서 최신 트윗을 가져옵니다.")
-async def tweet(interaction: discord.Interaction):
+async def tweet(interaction: discord.Interaction, userid: str):
     global last_tweet_id
     # 최근 트윗 가져오기
-    tweet = client.get_users_tweets(
-        user_id="twitter",
-        max_results=1,
-        tweet_fields=["text"],
-        expansions=["author_id"]
-    )
-    # 최근 트윗 ID 업데이트
-    last_tweet_id = tweet.id
-    await interaction.response.send_message(f"최근 트윗: {tweet.text}")
+    try:
+        tweet = client.get_users_tweets(
+            id=userid,  # 이 부분 문제 있음, 확인 필요, 좆매니리퀘스트 이 ㅅㄲ땜에 또 못했음 개 ㅅㅂ
+            max_results=5,
+            tweet_fields=["text"],
+            expansions=["author_id"]
+        )
+    except Exception as e:
+        print(f"Error fetching tweets: {e}")
+        await interaction.response.send_message("트윗을 가져올 수 없습니다.")
+        return
 
-# /get_id, 유저의 ID 가져오기
+    # 최근 트윗 ID 업데이트
+    if tweet.id != last_tweet_id:
+        last_tweet_id = tweet.id
+        await interaction.response.send_message(f"최근 트윗: {tweet.text}")
+    else:
+        await interaction.response.send_message("새로운 트윗이 없습니다.")
+
+
+# /get_id, 유저의 ID 가져오기 (숫자로만 이루어진 ID)
 @bot.tree.command(name="get_id", description="유저의 ID를 가져옵니다.")
 async def get_user_id(interaction: discord.Interaction, username: str):
     user_info = client.get_user(username = username)
     if user_info:
-        await interaction.response.send_message(f"ID: {user_info.id}")  # 이 부분 되는지 확인 해야됨 too many requests 땜에 확인 못 했음
+        try:
+            await interaction.response.send_message(user_info)
+        except:
+            await interaction.response.send_message("ID를 가져올 수 없습니다.")
     else:
         await interaction.response.send_message("유저를 찾을 수 없습니다.")
 
