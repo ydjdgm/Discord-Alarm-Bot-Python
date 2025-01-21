@@ -3,6 +3,7 @@ import discord
 import tweepy
 from discord.ext import commands
 from dotenv import load_dotenv
+import time
 
 # 환경 변수에서 디스코드 봇 토큰 불러오기
 load_dotenv("tokens.env")  # .env 파일 로드
@@ -13,6 +14,8 @@ TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
 client = tweepy.Client(bearer_token=TWITTER_BEARER_TOKEN)
 # 최근 트윗 ID 저장 변수
 last_tweet_id = None
+# API 사용 제한 종료 시간 (too many requests 에러 발생시 사용)
+cooldown_end_time = None
 
 
 # 봇 인텐트 설정
@@ -39,10 +42,20 @@ bot = MyBot()
 
 ################### 명령어 ###################
 
-# /hello, 명령어 작동 확인용용
+# /hello, 명령어 작동 확인용
 @bot.tree.command(name="hello", description="Say hello to the bot!")
 async def hello(interaction: discord.Interaction):
     await interaction.response.send_message(f"Hello, {interaction.user.name}!")
+
+# /cooldown, too many requests 에러 발생시 cooldown 시간 확인용용
+@bot.tree.command(name="check_cooldown", description="Check the cooldown time. (for too many requests)")
+async def check_cooldown(interaction: discord.Interaction):
+    global cooldown_end_time
+    if cooldown_end_time is None:
+        await interaction.response.send_message("현재 api 사용 가능상태입니다.")
+        return
+    remaining_time = cooldown_end_time - time.time()
+    return max(0, remaining_time)
 
 
 # /tweet, 최근 트윗 가져오기(미완성)
@@ -52,22 +65,27 @@ async def tweet(interaction: discord.Interaction, userid: str):
     # 최근 트윗 가져오기
     try:
         tweet = client.get_users_tweets(
-            id=userid,  # 이 부분 문제 있음, 확인 필요, 좆매니리퀘스트 이 ㅅㄲ땜에 또 못했음 개 ㅅㅂ
+            id=userid,  # 이 부분 문제 있음, 확인 필요, 투매니리퀘스트 이 ㅅㄲ땜에 또 못했음 개 ㅅㅂ, 일단 수정 했으니까 쿨 돌면 바로 돌려봅시다잉잉
             max_results=5,
             tweet_fields=["text"],
             expansions=["author_id"]
         )
     except Exception as e:
         print(f"Error fetching tweets: {e}")
-        await interaction.response.send_message("트윗을 가져올 수 없습니다.")
+        await interaction.response.send_message("트윗 불러오기에 실패했습니다다.")
         return
 
     # 최근 트윗 ID 업데이트
-    if tweet.id != last_tweet_id:
-        last_tweet_id = tweet.id
-        await interaction.response.send_message(f"최근 트윗: {tweet.text}")
-    else:
-        await interaction.response.send_message("새로운 트윗이 없습니다.")
+    try:
+        if tweet.id != last_tweet_id:
+            last_tweet_id = tweet.id
+            await interaction.response.send_message(f"최근 트윗: {tweet.text}")
+        else:
+            await interaction.response.send_message("새로운 트윗이 없습니다.")
+    except Exception as e:
+        await interaction.response.send_message("트윗을 가져올 수 없습니다.")
+        return
+
 
 
 # /get_id, 유저의 ID 가져오기 (숫자로만 이루어진 ID)
