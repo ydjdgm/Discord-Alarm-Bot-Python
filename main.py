@@ -88,6 +88,7 @@ async def tweet(interaction: discord.Interaction, userid: str):
         for tweet in tweets:
             if last_tweet_id is None or last_tweet_id < tweet.id:
                 last_tweet_id = tweet.id
+                tweet_url = f"https://twitter.com/{tweet.author_id}/status/{tweet.id}"  #이 부분 되는지 체크
                 await interaction.response.send_message(f"최근 트윗: {tweet.id}")
                 break
         else:
