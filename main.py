@@ -90,6 +90,7 @@ async def tweet(interaction: discord.Interaction, userid: str):
                 last_tweet_id = tweet.id
                 tweet_url = f"https://twitter.com/{tweet.author_id}/status/{tweet.id}"  #이 부분 되는지 체크
                 await interaction.response.send_message(f"최근 트윗: {tweet.id}")
+                await interaction.response.send_message(f"https://twitter.com/{tweet.author_id}/status/{tweet.id}")
                 break
         else:
             await interaction.response.send_message("새로운 트윗이 없습니다.")
