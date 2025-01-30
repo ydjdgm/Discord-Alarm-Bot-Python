@@ -17,8 +17,8 @@ TWITTER_ACCESS_TOKEN = os.getenv('TWITTER_ACCESS_TOKEN')
 TWITTER_ACCESS_SECRET = os.getenv('TWITTER_ACCESS_SECRET')
 
 
+# Twitter API Client
 client = tweepy.Client(bearer_token=TWITTER_BEARER_TOKEN)
-streaming_client = tweepy.StreamingClient(bearer_token=TWITTER_BEARER_TOKEN)
 
 
 # manage bot intents
@@ -59,11 +59,45 @@ async def handle_too_many_requests_error(interaction: discord.Interaction, respo
         return
     
 
-# /hello, 명령어 작동 확인용
+####################################################################################################
+###########################################COMMANDS#################################################
+
+# /hello, to check commands work
 @bot.tree.command(name="hello", description="Say hello to the bot!")
 async def hello(interaction: discord.Interaction):
     await interaction.response.send_message(f"Hello, {interaction.user.name}!")
 
+
+# /getuserid, to get User's ID (int ID)
+@bot.tree.command(name="getuserid", description="Get User's ID")
+async def get_user_id(interaction: discord.Interaction, username: str):
+    try:
+        user_info = client.get_users(usernames=username).data
+        await interaction.response.send_message(f"username = {user_info.username}\nname = {user_info.name}\nid = {user_info.id}")
+    except tweepy.TooManyRequests as e:
+        print (f"Error: {e}")
+        await interaction.response.send_message(await handle_too_many_requests_error(interaction, e.response))
+    except Exception as e:
+        print (f"Error: {e}")
+        await interaction.response.send_message(f"Unexpected error: {e}")
+
+
+# /gettweeturl, to get Tweet's URL
+@bot.tree.command(name="gettweeturl", description="Get Tweet's URL")
+async def get_tweet_url(interaction: discord.Interaction, username: str):
+    try:
+        userid = client.get_users(usernames=username).data.id
+        tweets = client.get_users_tweets(id=userid).data
+        await interaction.response.send_message(f"https://x.com/{username}/status/{tweets[0].id}")
+    except tweepy.TooManyRequests as e:
+        print (f"Error: {e}")
+        await interaction.response.send_message(await handle_too_many_requests_error(interaction, e.response))
+    except Exception as e:
+        print (f"Error: {e}")
+        await interaction.response.send_message(f"Unexpected error: {e}")
+
+###########################################COMMANDS#################################################
+####################################################################################################
 
 if DISCORD_BOT_TOKEN:
     bot.run(DISCORD_BOT_TOKEN)
