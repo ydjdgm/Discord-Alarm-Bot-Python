@@ -86,8 +86,8 @@ async def get_user_id(interaction: discord.Interaction, username: str):
 @bot.tree.command(name="gettweeturl", description="Get Tweet's URL")
 async def get_tweet_url(interaction: discord.Interaction, username: str):
     try:
-        userid = client.get_users(usernames=username).data.id
-        tweets = client.get_users_tweets(id=userid).data
+        userinfo = client.get_users(usernames=username).data
+        tweets = client.get_users_tweets(id=userinfo.id).data
         await interaction.response.send_message(f"https://x.com/{username}/status/{tweets[0].id}")
     except tweepy.TooManyRequests as e:
         print (f"Error: {e}")
